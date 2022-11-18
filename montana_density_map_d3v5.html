@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<meta charset="utf-8">
+<button id ="fillRed">red</button>
+<button id ="fillBlue">blue</button>
+
+<button onclick="border()">Border</button>
+<button onclick="noBorder()">No Border</button>
+<style>
+
+.counties {
+  fill: none;
+}
+
+.states {
+  fill: none;
+  stroke: #fff;
+  stroke-linejoin: round;
+}
+
+  div.tooltip {
+  position:absolute;
+  color: black;
+  text-align: center;
+  width: 150px;
+  height: 50px;
+  padding: 4px;
+  background-color: lightblue;
+  font: 12px sans-serif;  
+  pointer-events: none;
+}
+
+.q0-9 { fill:rgb(247,251,255); }
+.q1-9 { fill:rgb(222,235,247); }
+.q2-9 { fill:rgb(198,219,239); }
+.q3-9 { fill:rgb(158,202,225); }
+.q4-9 { fill:rgb(107,174,214); }
+.q5-9 { fill:rgb(66,146,198); }
+.q6-9 { fill:rgb(33,113,181); }
+.q7-9 { fill:rgb(8,81,156); }
+.q8-9 { fill:rgb(8,48,107); }
+
+</style>
+
+
+<svg width="960" height="1100"></svg>
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/topojson.v2.min.js"></script>
+<script>
+
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+var rateById = d3.map();
+
+var quantize = d3.scaleQuantize()
+    .domain([0, 0.15])
+    //.range(d3.range(9).map(function(i) { return 1; }));
+    //.range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+var projection = d3.geoAlbersUsa()
+    .scale(3500)
+    .translate([width, height-300]);
+
+var path = d3.geoPath()
+    .projection(projection);
+
+var color = d3.scaleThreshold()
+    .domain([1, 10, 50, 200, 500, 1000, 2000, 4000])
+    .range(d3.schemeOrRd[9]);
+
+var colorR = d3.scaleThreshold()
+    .domain([1, 10, 50, 200, 500, 1000, 2000, 4000])
+    .range(d3.schemeOrRd[9]);
+
+var colorB = d3.scaleThreshold()
+    .domain([1, 10, 50, 200, 500, 1000, 2000, 4000])
+    .range(d3.schemeBlues[9]);
+
+//color = colorR;
+
+var x = d3.scaleSqrt()
+    .domain([0, 4500])
+    .rangeRound([440, 950]);
+
+var g = svg.append("g")
+    .attr("class", "key")
+    .attr("transform", "translate(0,40)");
+
+g.selectAll("rect")
+  .data(color.range().map(function(d) {
+      d = color.invertExtent(d);
+      if (d[0] == null) d[0] = x.domain()[0];
+      if (d[1] == null) d[1] = x.domain()[1];
+      return d;
+    }))
+  .enter().append("rect")
+    .attr("height", 8)
+    .attr("x", function(d) { return x(d[0]); })
+    .attr("width", function(d) { return x(d[1]) - x(d[0]); })
+    .attr("fill", function(d) { return color(d[0]); });
+
+g.append("text")
+    .attr("class", "caption")
+    .attr("x", x.range()[0])
+    .attr("y", -6)
+    .attr("fill", "#000")
+    .attr("text-anchor", "start")
+    .attr("font-weight", "bold")
+    .text("Population per square mile");
+
+g.call(d3.axisBottom(x)
+    .tickSize(13)
+    .tickValues(color.domain()))
+  .select(".domain")
+    .remove();
+
+var mapColor = d3.select("body").append("div")
+    .attr("class", "button")
+    .style("opacity",1);
+
+var div = d3.select("body").append("div")
+  .attr("class","tooltip")
+  .style("opacity",0);
+
+var buttonBlue = d3.select("#fillBlue");
+var buttonRed = d3.select("#fillRed");
+  
+  d3.csv("Population-Density By County.csv").then((pdd)=>{
+  const densityMap = new Map();
+  for(let i = 0; i < pdd.length;i++)
+  {
+    densityMap.set(pdd[i]["GCT_STUB.target-geo-id2"], pdd[i]["Density per square mile of land area"]);
+    densityMap.set(pdd[i]["GCT_STUB.target-geo-id2"] + "name", pdd[i]["GCT_STUB.display-label"]);
+  }
+
+  d3.json("us-10m.json").then((topology)=> {
+  var counties = svg.append("g")
+    .attr("class", "counties")
+    .selectAll("path")
+    .data(topojson.feature(topology, topology.objects.counties).features)
+    .enter().append("path")
+    .filter(function(d){
+      if(30001 <= d.id && d.id <= 30111)
+      {
+        console.log(d.id);
+        return d.id;
+        //return d.id;
+        //return quantize(rateById.get(d.id));
+      }
+    })
+    .attr("fill", function(d){
+      console.log(color(densityMap.get("" + d.id)));
+      return color(densityMap.get("" + d.id));
+      //console.log(color(d.properties.density));
+      //return color(d.properties.density);
+    })
+    .attr("transform","translate(0,10)")
+    .attr("class",function(d){
+      console.log(densityMap.get(""+d.id));
+      return d3.quantize(densityMap.get(""+d.id));
+    })
+    .attr("d", path)
+    .on("mouseover",function(d,event){
+      console.log("mouseover");
+      console.log(densityMap.get(""+d.id));
+      div.transition()
+        .duration(200)
+        .style("opacity",.9);
+      div.html(densityMap.get(d.id + "name")+"<br/>" + "Population Density: " + densityMap.get(""+d.id) + " People per square mile")
+        .style("left",(d3.event.pageX)+"px")
+        .style("top",(d3.event.pageY-20)+"px");
+    })
+    .on("mouseout",function(event, d){
+      console.log("mouseout");
+      div.transition().duration(200).style("opacity",0);
+    })
+
+
+    // .on("click", function(d){
+    //   d3.selectAll(".country")
+    //   .attr("fill", function(d)
+    //   {
+    //     return (bluColor(densityMap.get(""+d.id)));
+    //   })
+    // })
+
+    buttonRed.on("click", redFill);
+    buttonBlue.on("click", blueFill);
+
+    function redFill(){
+      console.log("red");
+      counties.attr("fill", function(d){
+          console.log(colorR(densityMap.get("" + d.id)));
+          //return colorR(densityMap.get(""+d.id));
+          return colorR(densityMap.get("" + d.id));
+        });
+      d3.selectAll("rect")
+    }
+
+    function blueFill(){
+      console.log("BLue");
+      counties.attr("fill", function(d){
+          console.log("FILL BLUE");
+          return colorB(densityMap.get(""+d.id));
+        });
+      d3.selectAll("rect")
+    }
+
+
+    
+  }); // end of json
+
+}); // end of csv
+
+function border()
+{
+  console.log("grey");
+  d3.selectAll(".counties").style("stroke","black");
+}
+function noBorder()
+{
+  console.log("white");
+  d3.selectAll(".counties").style("stroke","white");
+}
+
+
+// svg.selectAll("path")
+  //   .attr("fill", function(d,event)
+  //   {
+  //     svg.selectAll("path").style("color", "black");
+  //   })
+
+  // function blueFill(){
+  //   d3.selectAll(".country")
+  //     .attr("fill", function(d)
+  //     {
+  //       return (bluColor(densityMap.get(""+d.id)));
+  //     })
+  // console.log("CHANGE COLOR");
+  // svg.selectAll("path")
+  //   .attr("fill", function(d)
+  //   {
+  //     return d3.schemeBlue[densityMap.get(""+d.id)];
+  //   })
+    //.attr("fill", "lightblue");
+      // .transition()
+      // .duration(2000)
+      // .color(densityMap.get("" + d.id))
+      //.style("fill", "lightblue");
+      //.range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+//}
+
+// buttonRed.on("click", redFill);
+// buttonBlue.on("click", blueFill);
+
+// function redFill(){
+//   console.log("red");
+//   d3.selectAll(".counties")
+//     .attr("fill", function(d){
+//       return colorR(densityMap.get(""+d.id));
+//     });
+//   d3.selectAll("rect")
+// }
+
+// function blueFill(){
+//   console.log("BLue");
+//   d3.selectAll(".counties")
+//     .attr("fill", function(d){
+//       return colorB(densityMap.get(""+d.id));
+//     });
+//   d3.selectAll("rect")
+// }
+// function blueFill(){
+//       console.log("BLue");
+//       d3.selectAll(".counties")
+//         .attr("fill", function(d){
+//           color = colorB;
+//           return color;
+//           //return colorB(densityMap.get(""+d.id));
+//         });
+//       d3.selectAll("rect")
+// }
+
+
+// function changeRed()
+// {
+//   console.log("red");
+//   d3.selectAll(".country").attr("fill", function(d){
+//     return ((densityMap.get(""+d.id)));
+//   });
+//   // d3.selectAll("rect")
+//   //   .attr("fill", funciton(d){
+//   //     return redColor(d[0]);
+//   //   })
+// }
+
+
+// function blueFill(){
+//   console.log("CHANGE COLOR");
+//   svg.selectAll("path")
+//     .attr("fill", function(d)
+//     {
+//       return d3.schemeBlue[d.id];
+//     })
+//     //.attr("fill", "lightblue");
+//       // .transition()
+//       // .duration(2000)
+//       // .color(densityMap.get("" + d.id))
+//       //.style("fill", "lightblue");
+//       //.range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+// }
+
+// function redFill(){
+//   d3.selectAll(".country")
+//     .attr("fill", function(d){
+//       return bluColor(densityMap.get(""+d.id));
+//     });
+//   d3.selectAll("rect")
+// }
+
+
+</script>
